@@ -1,0 +1,34 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="eyebrow">HIDE SOMETHING</div>
+<h1 class="page-title">Hide a <em>secret.</em></h1>
+<p class="sub">Put a message, picture, or document inside an audio or video file. Follow the steps below.</p>
+<form method="post" enctype="multipart/form-data" class="panel formpanel" id="mediaform">
+{% csrf_token %}
+<div class="step">STEP 1 — WHAT KIND OF FILE WILL HOLD YOUR SECRET?</div>
+<p class="muted">Choose the audio or video that will carry your hidden content.</p>
+<div class="types"><label><input type="radio" name="carrier" value="audio" checked> ♫ Audio <small>WAV file</small></label><label><input type="radio" name="carrier" value="video"> ▣ Video <small>Short clips work best</small></label></div>
+<div class="step">STEP 2 — CHOOSE YOUR AUDIO OR VIDEO</div>
+<div class="upload"><span>↑</span><strong>Choose the audio or video from your computer</strong><small>Up to 50 MB. Short files are faster.</small><input type="file" name="file" id="file" accept=".wav,.avi,.mp4,.mov,.mkv,audio/wav,video/*" aria-label="Choose audio or video"><small id="carrierFileName">No file selected yet</small></div>
+<div class="field"><label>OR USE A FILE YOU ALREADY SAVED</label><select name="item_id"><option value="">Use the file I chose above</option>{% for item in items %}<option value="{{ item.id }}" data-carrier="{{ item.carrier }}">{{ item.name }}</option>{% endfor %}</select></div>
+<div class="step">STEP 3 — WHAT DO YOU WANT TO HIDE?</div>
+<div class="types"><label><input type="radio" name="secret_mode" value="text" checked> ✎ A written message</label><label><input type="radio" name="secret_mode" value="file"> ▤ A picture or file</label></div>
+<div class="field" id="secretTextField"><label>WRITE YOUR SECRET MESSAGE</label><textarea name="message" rows="5" placeholder="Type your message here..."></textarea></div>
+<div class="field" id="secretFileField" style="display:none"><label>CHOOSE THE PICTURE OR FILE TO HIDE</label><input type="file" name="secret_file" id="secret_file" aria-label="Choose picture or document"><small id="secretFileName">No file selected yet</small><small class="muted">Pictures, PDFs, Word files, ZIP files and more. Maximum 2 MB, depending on the audio or video size.</small></div>
+<div class="step">STEP 4 — ADD A PASSWORD (OPTIONAL)</div>
+<div class="field"><label>PASSWORD</label><input type="password" name="password" placeholder="Leave empty if you don't want a password"><small class="muted">If you add a password, the other person needs it to open the secret. Don't lose it.</small></div>
+<div class="actions"><button class="btn" type="submit" id="encodeSubmit">Hide my secret →</button><button class="btn ghost" type="button" id="capacityBtn">Will my secret fit?</button></div>
+<p id="capacityResult" class="muted" aria-live="polite"></p><p class="muted" id="encodeWait" style="display:none">Working on your file. Video files may take a few minutes. Please don't click again.</p>
+</form>
+<script>
+document.addEventListener('DOMContentLoaded',function(){
+ const text=document.getElementById('secretTextField'), file=document.getElementById('secretFileField');
+ const message=document.querySelector('textarea[name="message"]'), upload=document.getElementById('secret_file');
+ function show(){const isFile=document.querySelector('input[name="secret_mode"]:checked')?.value==='file';text.style.display=isFile?'none':'block';file.style.display=isFile?'block':'none';message.required=!isFile;upload.required=isFile;}
+ document.querySelectorAll('input[name="secret_mode"]').forEach(r=>r.addEventListener('change',show));show();
+ document.getElementById('file').addEventListener('change',function(){document.getElementById('carrierFileName').textContent=this.files[0]?.name||'No file selected yet';});
+ upload.addEventListener('change',function(){document.getElementById('secretFileName').textContent=this.files[0]?.name||'No file selected yet';});
+ document.getElementById('mediaform').addEventListener('submit',function(e){if(!this.checkValidity())return;const b=document.getElementById('encodeSubmit');b.disabled=true;b.textContent='Hiding your secret…';document.getElementById('encodeWait').style.display='block';});
+});
+</script>
+{% endblock %}

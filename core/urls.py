@@ -1,0 +1,4 @@
+from django.urls import path
+from django.contrib.auth import views as auth
+from . import views
+urlpatterns=[path('',views.home,name='home'),path('signup/',views.signup,name='signup'),path('login/',auth.LoginView.as_view(template_name='core/login.html'),name='login'),path('logout/',auth.LogoutView.as_view(),name='logout'),path('dashboard/',views.dashboard,name='dashboard'),path('encode/',views.encode,name='encode'),path('decode/',views.decode,name='decode'),path('library/',views.library,name='library'),path('library/upload/',views.upload_inventory,name='upload_inventory'),path('library/<int:pk>/download/',views.download,name='download'),path('library/<int:pk>/delete/',views.delete,name='delete'),path('features/',views.features,name='features'),path('tutorial/',views.tutorial,name='tutorial'),path('capacity/',views.capacity_view,name='capacity')]

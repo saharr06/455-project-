@@ -1,0 +1,10 @@
+{% extends 'core/base.html' %}{% block auth_content %}
+<div class="login-card"><div class="login-brand">STEGONOGRAPHY</div><h1>Log in</h1><p class="muted">Enter your username and password.</p>
+<form method="post">{% csrf_token %}
+{% if form.errors %}<div class="notice bad">Incorrect username or password. Please try again.</div>{% endif %}
+<label for="id_username">Username</label><input type="text" name="username" id="id_username" autocomplete="username" required autofocus>
+<label for="id_password">Password</label><input type="password" name="password" id="id_password" autocomplete="current-password" required>
+{% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+<button type="submit" class="btn login-button">Log in</button></form>
+<p class="muted">Don't have an account? <a href="{% url 'signup' %}">Create one</a></p></div>
+{% endblock %}
