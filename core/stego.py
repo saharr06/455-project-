@@ -527,16 +527,19 @@ def video_process(source_path, output_path, payload=None):
 
 def capacity(raw, carrier):
     """
-    Estimate the available payload capacity of a WAV carrier.
-    Video capacity is calculated during video processing.
+    Calculate the available payload capacity of a WAV file.
     """
 
     if carrier == 'audio':
 
         with wave.open(io.BytesIO(raw), 'rb') as wf:
 
-            # Divide the number of audio frames by eight
-            # and subtract the four-byte payload length header.
-            return max(0, wf.getnframes() // 8 - 4)
+            # Count samples across all audio channels.
+            total_samples = (
+                wf.getnframes() * wf.getnchannels()
+            )
+
+            # One secret bit can be stored per sample.
+            return max(0, total_samples // 8 - 4)
 
     return None
