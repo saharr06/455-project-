@@ -36,11 +36,10 @@ Open http://127.0.0.1:8000/ and select **Create account**.
 python manage.py test core
 ```
 
-Demo: register, encode a WAV message, download, extract, test wrong password, test video encoding and extraction, show inventory and tutorial.
+
 
 
 ### Inventory behavior
 Every newly registered account receives both `sample_tone.wav` and `sample_video.avi` in its inventory. The inventory page also has an independent upload form. Files uploaded during Hide Message or Extract Message are automatically stored as originals in the signed-in user's inventory; encoded results are stored separately. Files selected from the existing inventory are not duplicated. Existing accounts created with an earlier release can upload the included sample files manually from the `samples/` directory. The original dark charcoal and lime accent colors have been restored.
 
-## New: hide files inside audio or video
-On **Hide text / file**, select **File / picture**, upload a small secret attachment, choose a WAV or video carrier, optionally enter a password, and generate the encoded media. On **Extract content**, upload/select the encoded media and retrieve the original attachment from the download link. Extracted files are saved to your personal inventory. The **All features** page explains the tools and technical limitations.
+
