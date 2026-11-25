@@ -1,0 +1,672 @@
+{% extends 'core/base.html' %}
+{% load l10n %}
+{% block content %}
+
+<div class="eyebrow">
+    PERFORMANCE AND QUALITY EVALUATION
+</div>
+
+<h1 class="page-title">
+    Technical <em>Analysis</em>
+</h1>
+
+<p class="sub">
+    Compare original and encoded media to evaluate
+    the impact of LSB steganography.
+</p>
+
+<div class="panel">
+
+    <h2>Compare your media</h2>
+
+    <form method="post" enctype="multipart/form-data">
+
+        {% csrf_token %}
+
+        <div class="step">01 — MEDIA TYPE</div>
+
+        <div class="types">
+
+            <label>
+                <input type="radio"
+                       name="carrier"
+                       value="video"
+                       {% if carrier != 'audio' %}checked{% endif %}>
+                Video
+            </label>
+
+            <label>
+                <input type="radio"
+                       name="carrier"
+                       value="audio"
+                       {% if carrier == 'audio' %}checked{% endif %}>
+                Audio
+            </label>
+
+        </div>
+
+        <div class="comparison-grid">
+
+            <div>
+
+                <div class="step">
+                    02 — ORIGINAL FILE
+                </div>
+
+                <div class="field">
+
+                    <label>Select from inventory</label>
+
+                    <select name="original_id">
+
+                        <option value="">
+                            Choose original file
+                        </option>
+
+                        {% for item in items %}
+
+                            {% if item.kind == 'original' %}
+
+                                <option value="{{ item.pk }}">
+                                    {{ item.name }}
+                                </option>
+
+                            {% endif %}
+
+                        {% endfor %}
+
+                    </select>
+
+                </div>
+
+                <div class="upload">
+
+                    <strong>Or upload original media</strong>
+
+                    <input type="file"
+                           name="original"
+                           accept="audio/*,video/*">
+
+                </div>
+
+            </div>
+
+            <div>
+
+                <div class="step">
+                    03 — ENCODED FILE
+                </div>
+
+                <div class="field">
+
+                    <label>Select from inventory</label>
+
+                    <select name="encoded_id">
+
+                        <option value="">
+                            Choose encoded file
+                        </option>
+
+                        {% for item in items %}
+
+                            {% if item.kind == 'encoded' %}
+
+                                <option value="{{ item.pk }}">
+                                    {{ item.name }}
+                                </option>
+
+                            {% endif %}
+
+                        {% endfor %}
+
+                    </select>
+
+                </div>
+
+                <div class="upload">
+
+                    <strong>Or upload encoded media</strong>
+
+                    <input type="file"
+                           name="encoded"
+                           accept="audio/*,video/*">
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="actions">
+
+            <button class="btn" type="submit">
+                Analyze differences →
+            </button>
+
+        </div>
+
+    </form>
+
+</div>
+
+
+{% if result %}
+<div class="panel quality-summary">
+
+    <div class="eyebrow">YOUR RESULTS</div>
+
+    <h2>How much did your media change?</h2>
+
+    <div class="preservation-number">
+        {{ result.similarity }}%
+    </div>
+
+    <h3>Original values unchanged</h3>
+
+    <progress class="similarity-progress"
+              value="{{ result.similarity|unlocalize }}"
+              max="100">
+    </progress>
+
+    <p>
+        Only {{ result.change_percent }}% of the
+        original values were modified.
+    </p>
+
+    <div class="quality-grid">
+
+        <div class="quality-card">
+
+            <h3>Mean Squared Error (MSE)</h3>
+
+            <div class="quality-number">
+                {{ result.mse }}
+            </div>
+
+            <div class="quality-rating">
+                {{ result.mse_label }}
+            </div>
+
+            <input type="range"
+                   class="quality-scale"
+                   min="0"
+                   max="100"
+                   step="any"
+                   value="{{ result.mse_score|unlocalize }}"
+                   aria-label="MSE quality score"
+                   disabled>
+
+            <div class="scale-labels">
+                <span>High error</span>
+                <span>Low error</span>
+            </div>
+
+            <p>
+                Measures the difference between
+                the original and encoded media.
+                Lower MSE is better.
+            </p>
+
+        </div>
+
+        <div class="quality-card">
+
+            <h3>{{ result.quality_name }}</h3>
+
+            <div class="quality-number">
+
+                {% if result.quality_score != None %}
+                    {{ result.quality_value }} dB
+                {% else %}
+                    N/A
+                {% endif %}
+
+            </div>
+
+            <div class="quality-rating">
+                {{ result.quality_label }}
+            </div>
+
+            {% if result.quality_score != None %}
+
+                <input type="range"
+                       class="quality-scale"
+                       min="0"
+                       max="100"
+                       step="any"
+                       value="{{ result.quality_score|unlocalize }}"
+                       aria-label="Media quality score"
+                       disabled>
+
+                <div class="scale-labels">
+                    <span>Poor</span>
+                    <span>Excellent</span>
+                </div>
+
+            {% endif %}
+
+            <p>
+                Measures the quality of your encoded
+                media relative to the original.
+                Higher values are better.
+            </p>
+
+        </div>
+
+        <div class="quality-card">
+
+            <h3>Maximum difference</h3>
+
+            <div class="quality-number">
+                {{ result.max_error }}
+            </div>
+
+            {% if result.max_error <= 1 %}
+
+                <div class="quality-good">
+                    Consistent with LSB embedding
+                </div>
+
+            {% else %}
+
+                <div class="quality-bad">
+                    Larger differences detected
+                </div>
+
+            {% endif %}
+
+            <p>
+                The largest individual change between
+                the original and encoded media.
+            </p>
+
+        </div>
+
+        <div class="quality-card">
+
+            <h3>Average error percentage</h3>
+
+            <div class="quality-number">
+                {{ result.normalized_error }}%
+            </div>
+
+            <p>
+                Average difference relative to
+                the maximum signal amplitude.
+                A value close to zero is better.
+            </p>
+
+        </div>
+
+    </div>
+
+</div>
+<div class="panel">
+
+    <div class="eyebrow">ANALYSIS COMPLETE</div>
+
+    <h2>Media information</h2>
+
+    <p>
+        <strong>Original:</strong>
+        {{ result.original_name }}
+    </p>
+
+    <p>
+        <strong>Encoded:</strong>
+        {{ result.encoded_name }}
+    </p>
+
+    <p>
+        <strong>Original size:</strong>
+        {{ result.original_size }} KB
+    </p>
+
+    <p>
+        <strong>Encoded size:</strong>
+        {{ result.encoded_size }} KB
+    </p>
+
+    <p>
+        <strong>Analysis time:</strong>
+        {{ result.processing_time }} seconds
+    </p>
+
+    {% if carrier == 'video' %}
+
+        <p>
+            <strong>Resolution:</strong>
+            {{ result.width }} × {{ result.height }}
+        </p>
+
+        <p>
+            <strong>Frames analyzed:</strong>
+            {{ result.frames }}
+        </p>
+
+    {% else %}
+
+        <p>
+            <strong>Samples analyzed:</strong>
+            {{ result.samples }}
+        </p>
+
+        <p>
+            <strong>Sample rate:</strong>
+            {{ result.sample_rate }} Hz
+        </p>
+
+        <p>
+            <strong>Bit depth:</strong>
+            {{ result.bit_depth }} bits
+        </p>
+
+        <p>
+            <strong>Channels:</strong>
+            {{ result.channels }}
+        </p>
+
+        <p>
+            <strong>Duration:</strong>
+            {{ result.duration }} seconds
+        </p>
+
+    {% endif %}
+
+</div>
+
+
+{% if carrier == 'video' %}
+
+<div class="panel">
+
+    <h2>Visual comparison</h2>
+
+    <p>
+        First frame of the original and encoded videos.
+    </p>
+
+    <div class="comparison-grid">
+
+        <div class="comparison-image">
+
+            <h3>Original frame</h3>
+
+            <img
+                src="data:image/png;base64,{{ result.original_image }}"
+                alt="Original video frame">
+
+        </div>
+
+        <div class="comparison-image">
+
+            <h3>Encoded frame</h3>
+
+            <img
+                src="data:image/png;base64,{{ result.encoded_image }}"
+                alt="Encoded video frame">
+
+        </div>
+
+    </div>
+
+    <h3>Difference image</h3>
+
+    <p>
+        Differences are amplified by 255 to make
+        small pixel changes visible.
+        Black areas represent unchanged values.
+    </p>
+
+    <div class="difference-image">
+
+        <img
+            src="data:image/png;base64,{{ result.difference_image }}"
+            alt="Amplified differences">
+
+    </div>
+
+</div>
+
+{% endif %}
+
+
+<div class="panel">
+
+    <h2>Numerical analysis</h2>
+
+    <div class="metric-grid">
+
+        <div class="metric-card">
+
+            <small>MEAN SQUARED ERROR</small>
+
+            <strong>{{ result.mse }}</strong>
+
+            <p>Average squared difference.</p>
+
+        </div>
+
+        <div class="metric-card">
+
+            <small>MEAN ABSOLUTE ERROR</small>
+
+            <strong>{{ result.mae }}</strong>
+
+            <p>Average absolute difference.</p>
+
+        </div>
+
+        <div class="metric-card">
+
+            <small>NORMALIZED ERROR</small>
+
+            <strong>{{ result.normalized_error }}%</strong>
+
+            <p>Average error relative to peak amplitude.</p>
+
+        </div>
+
+        {% if carrier == 'video' %}
+
+        <div class="metric-card">
+
+            <small>PSNR</small>
+
+            <strong>{{ result.psnr }} dB</strong>
+
+            <p>Peak signal-to-noise ratio.</p>
+
+        </div>
+
+        {% else %}
+
+        <div class="metric-card">
+
+            <small>SNR</small>
+
+            <strong>{{ result.snr }} dB</strong>
+
+            <p>Signal-to-noise ratio.</p>
+
+        </div>
+
+        {% endif %}
+
+        <div class="metric-card">
+
+            <small>MAXIMUM ERROR</small>
+
+            <strong>{{ result.max_error }}</strong>
+
+            <p>Largest individual difference.</p>
+
+        </div>
+
+        <div class="metric-card">
+
+            <small>MODIFIED VALUES</small>
+
+            <strong>{{ result.change_percent }}%</strong>
+
+            <p>{{ result.changed }} changed values.</p>
+
+        </div>
+
+        <div class="metric-card">
+
+            <small>UNCHANGED VALUES</small>
+
+            <strong>{{ result.similarity }}%</strong>
+
+            <p>{{ result.unchanged }} unchanged values.</p>
+
+        </div>
+
+        <div class="metric-card">
+
+            <small>TOTAL VALUES ANALYZED</small>
+
+            <strong>{{ result.total }}</strong>
+
+            <p>{{ result.unit }}</p>
+
+        </div>
+
+        <div class="metric-card">
+
+            <small>PAYLOAD CAPACITY</small>
+
+            <strong>{{ result.capacity }}</strong>
+
+            <p>Available payload bytes, including metadata.</p>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<div class="panel">
+
+    <h2>Media similarity</h2>
+
+    <progress class="similarity-progress"
+          value="{{ result.similarity|unlocalize }}"
+          max="100">
+    </progress>
+
+    <p>
+        {{ result.similarity }}% of the compared
+        values are exactly unchanged.
+    </p>
+
+    {% if result.max_error <= 1 %}
+
+        <div class="notice">
+
+            The maximum observed difference is consistent
+            with direct least significant bit embedding.
+
+        </div>
+
+    {% else %}
+
+        <div class="notice bad">
+
+            Differences greater than one were detected.
+            Check whether the media was recompressed
+            or whether the selected files correspond.
+
+        </div>
+
+    {% endif %}
+
+</div>
+
+{% endif %}
+
+
+<div class="panel">
+
+    <h2>Technical implementation</h2>
+
+    <div class="metric-grid">
+
+        <div class="metric-card">
+            <small>STEGANOGRAPHY</small>
+            <strong>LSB</strong>
+            <p>Least Significant Bit substitution.</p>
+        </div>
+
+        <div class="metric-card">
+            <small>OPTIONAL ENCRYPTION</small>
+            <strong>AES-256-GCM</strong>
+            <p>Authenticated symmetric encryption.</p>
+        </div>
+
+        <div class="metric-card">
+            <small>KEY DERIVATION</small>
+            <strong>Scrypt</strong>
+            <p>Password-based 256-bit key generation.</p>
+        </div>
+
+        <div class="metric-card">
+            <small>VIDEO OUTPUT</small>
+            <strong>FFV1</strong>
+            <p>Lossless AVI video encoding.</p>
+        </div>
+
+        <div class="metric-card">
+            <small>AUDIO OUTPUT</small>
+            <strong>PCM WAV</strong>
+            <p>Uncompressed audio samples.</p>
+        </div>
+
+        <div class="metric-card">
+            <small>PAYLOAD LIMIT</small>
+            <strong>2 MB</strong>
+            <p>Maximum application payload size.</p>
+        </div>
+
+    </div>
+
+</div>
+
+
+<div class="panel">
+
+    <h2>Understanding LSB</h2>
+
+    <p>
+        Example of hiding a secret bit equal to 1
+        inside a pixel value of 150.
+    </p>
+
+    <div class="binary-example">
+
+        <div>
+            <small>Original value — 150</small>
+            <div>1001011<span>0</span></div>
+        </div>
+
+        <div>
+            <small>Encoded value — 151</small>
+            <div>1001011<span>1</span></div>
+        </div>
+
+    </div>
+
+    <p>
+        Absolute error = |151 - 150| = 1
+    </p>
+
+    <p>
+        Only the least significant bit changes,
+        minimizing the impact on media quality.
+    </p>
+
+</div>
+
+{% endblock %}

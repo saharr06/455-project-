@@ -21,7 +21,8 @@ import os
 import json
 import struct
 import wave
-
+import subprocess
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -402,144 +403,483 @@ def wav_decode(raw):
 
 
 def video_process(source_path, output_path, payload=None):
-    """
-    Hide or extract secret information using the first video frame.
-
-    If a payload is provided, the function performs encoding.
-    If no payload is provided, the function performs decoding.
-
-    The output video uses the lossless FFV1 codec to preserve
-    the modified least significant bits.
-    """
-
     import cv2
 
-    # Open the source video using OpenCV.
     cap = cv2.VideoCapture(str(source_path))
-
-    if not cap.isOpened():
-        raise ValueError(
-            'Cannot read video. Try an AVI or MP4 input.'
-        )
-
-    # Read the original video properties.
-    fps = cap.get(cv2.CAP_PROP_FPS) or 24
-
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-    # Validate the video dimensions.
-    if width < 1 or height < 1:
-
-        cap.release()
-
-        raise ValueError('Invalid video dimensions.')
-
-  
-    # VIDEO DECODING
-    
-
-    if payload is None:
-
-        # Read the first frame containing the hidden information.
-        ok, frame = cap.read()
-
-        cap.release()
-
-        if not ok:
-            raise ValueError('Video contains no frames.')
-
-        # Flatten the frame into a one-dimensional array
-        # of Blue, Green, and Red color values.
-        pixel_values = frame.reshape(-1)
-
-        # Extract the hidden information from the pixel LSBs.
-        return extract(pixel_values)
-
-   
-    # VIDEO ENCODING
-  
-
-    # Read the first frame of the video.
-    ok, first = cap.read()
-
-    if not ok:
-
-        cap.release()
-
-        raise ValueError('Video contains no frames.')
-
-    # Flatten the first frame into a one-dimensional array.
-    # Each pixel contains three color channels: B, G, and R.
-    pixel_values = first.reshape(-1)
-
-    # Hide the secret information in the pixel color values.
-    insert(pixel_values, payload)
-
-    # Create the output video using the lossless FFV1 codec.
-    # Lossless encoding preserves the modified pixel values.
-    writer = cv2.VideoWriter(
-        str(output_path),
-        cv2.VideoWriter_fourcc(*'FFV1'),
-        fps,
-        (width, height)
-    )
-
-    if not writer.isOpened():
-
-        cap.release()
-
-        raise ValueError(
-            'FFV1 video encoder unavailable in OpenCV.'
-        )
+    writer = None
 
     try:
+        if not cap.isOpened():
+            raise ValueError('Cannot read video.')
 
-        # Write the modified first frame.
-        writer.write(first)
+        # DECODING MODE
+        if payload is None:
+            chunks = []
+            collected = 0
+            target = 32
+            length = None
 
-        # Read and write the remaining frames without
-        # embedding any additional secret information.
+            while True:
+                ok, frame = cap.read()
+
+                if not ok:
+                    break
+
+                flat = frame.reshape(-1)
+                pos = 0
+
+                while pos < flat.size and collected < target:
+
+                    take = min(
+                        flat.size - pos,
+                        target - collected
+                    )
+
+                    # Extract least significant bits
+                    chunks.append(
+                        flat[pos:pos + take] & 1
+                    )
+
+                    collected += take
+                    pos += take
+
+                    # Read the 4-byte payload length
+                    if length is None and collected == 32:
+                        header = np.packbits(
+                            np.concatenate(chunks)
+                        ).tobytes()
+
+                        length = struct.unpack('>I', header)[0]
+
+                        if not 4 <= length <= MAX_PAYLOAD:
+                            raise ValueError(
+                                'No supported hidden message found.'
+                            )
+
+                        target = (length + 4) * 8
+
+                # Return the complete extracted payload
+                if length is not None and collected == target:
+                    return np.packbits(
+                        np.concatenate(chunks)[32:]
+                    ).tobytes()
+
+            raise ValueError('Incomplete hidden message.')
+
+        # ENCODING MODE
+        if len(payload) > MAX_PAYLOAD:
+            raise ValueError('Message is too large.')
+
+        fps = cap.get(cv2.CAP_PROP_FPS) or 24
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+        if width < 1 or height < 1:
+            raise ValueError('Invalid video dimensions.')
+
+        if width % 2 or height % 2:
+            raise ValueError('Video dimensions must be even.')
+
+        # Add the payload length and convert to bits
+        data = struct.pack('>I', len(payload)) + payload
+
+        stream = np.unpackbits(
+            np.frombuffer(data, dtype=np.uint8)
+        )
+
+        writer = cv2.VideoWriter(
+            str(output_path),
+            cv2.VideoWriter_fourcc(*'FFV1'),
+            fps,
+            (width, height)
+        )
+
+        if not writer.isOpened():
+            raise ValueError('FFV1 encoder unavailable.')
+
+        offset = 0
+        total = 0
+
         while True:
-
             ok, frame = cap.read()
 
             if not ok:
                 break
 
+            if frame.shape != (height, width, 3):
+                raise ValueError('Unexpected frame dimensions.')
+
+            flat = frame.reshape(-1)
+            total += flat.size
+
+            # Number of bits to hide in this frame
+            take = min(flat.size, stream.size - offset)
+
+            if take > 0:
+
+                # Clear LSBs and insert secret bits
+                flat[:take] = (
+                    flat[:take] & 254
+                ) | stream[offset:offset + take]
+
+                offset += take
+
+            # Write every frame to the output video
             writer.write(frame)
 
-    finally:
+        if offset < stream.size:
+            raise ValueError('Video capacity is too small.')
 
-        # Release the video resources.
-        writer.release()
+        return min(
+            MAX_PAYLOAD,
+            max(0, total // 8 - 4)
+        )
+
+    finally:
         cap.release()
 
-    # Each pixel contains three color values.
-    # Each color value can store one secret bit.
-    # Divide by eight to convert bits into bytes.
-    # Subtract four bytes for the payload length header.
-    return max(0, width * height * 3 // 8 - 4)
-
+        if writer is not None:
+            writer.release()
 
 # 8. CARRIER CAPACITY CALCULATION
+def video_capacity(source_path):
+    import cv2
 
+    cap = cv2.VideoCapture(str(source_path))
+    total = 0
+
+    try:
+        if not cap.isOpened():
+            raise ValueError('Cannot read video.')
+
+        while True:
+            ok, frame = cap.read()
+
+            if not ok:
+                break
+
+            total += frame.size
+
+    finally:
+        cap.release()
+
+    if total == 0:
+        raise ValueError('Video contains no frames.')
+
+    return min(
+        MAX_PAYLOAD,
+        max(0, total // 8 - 4)
+    )
 
 def capacity(raw, carrier):
-    """
-    Calculate the available payload capacity of a WAV file.
-    """
 
     if carrier == 'audio':
 
         with wave.open(io.BytesIO(raw), 'rb') as wf:
 
-            # Count samples across all audio channels.
             total_samples = (
                 wf.getnframes() * wf.getnchannels()
             )
 
-            # One secret bit can be stored per sample.
-            return max(0, total_samples // 8 - 4)
+            return min(
+                MAX_PAYLOAD,
+                max(0, total_samples // 8 - 4)
+            )
 
     return None
+
+def convert_audio_to_wav(raw, filename):
+    """Convert supported audio input to PCM WAV."""
+
+    with tempfile.TemporaryDirectory() as directory:
+
+        source = Path(directory) / Path(filename).name
+        output = Path(directory) / 'converted.wav'
+
+        source.write_bytes(raw)
+
+        command = [
+            'ffmpeg',
+            '-y',
+            '-i', str(source),
+            '-vn',
+            '-c:a', 'pcm_s16le',
+            str(output)
+        ]
+
+        try:
+            subprocess.run(
+                command,
+                check=True,
+                capture_output=True,
+                timeout=120
+            )
+
+        except FileNotFoundError:
+            raise ValueError('FFmpeg is not installed.')
+
+        except subprocess.TimeoutExpired:
+            raise ValueError('Audio conversion timed out.')
+
+        except subprocess.CalledProcessError:
+            raise ValueError('Cannot convert this audio file.')
+
+        return output.read_bytes()
+# 9. TECHNICAL ANALYSIS
+
+import math
+import base64
+
+
+def calculate_metrics(total, changed, absolute, squared,
+                      maximum, peak, signal_power):
+
+    if total == 0:
+        raise ValueError('No media values to compare.')
+
+    mse = squared / total
+    mae = absolute / total
+
+    psnr = (
+        'Infinity'
+        if mse == 0
+        else round(10 * math.log10(peak ** 2 / mse), 4)
+    )
+
+    if squared == 0:
+        snr = 'Infinity'
+    elif signal_power == 0:
+        snr = 'Undefined for silent original'
+    else:
+        snr = round(
+            10 * math.log10(signal_power / squared), 4
+        )
+
+    return {
+        'mse': round(mse, 10),
+        'mae': round(mae, 10),
+        'psnr': psnr,
+        'snr': snr,
+        'total': total,
+        'changed': changed,
+        'unchanged': total - changed,
+        'change_percent': round(changed / total * 100, 8),
+        'similarity': round((total - changed) / total * 100, 8),
+        'max_error': maximum,
+        'normalized_error': round(mae / peak * 100, 10),
+        'capacity': min(
+            MAX_PAYLOAD,
+            max(0, total // 8 - 4)
+        )
+    }
+
+
+def frame_to_base64(frame):
+
+    import cv2
+
+    success, buffer = cv2.imencode('.png', frame)
+
+    if not success:
+        raise ValueError('Cannot generate frame preview.')
+
+    return base64.b64encode(
+        buffer.tobytes()
+    ).decode('utf-8')
+
+
+def compare_videos(original_path, encoded_path):
+
+    import cv2
+
+    original = cv2.VideoCapture(str(original_path))
+    encoded = cv2.VideoCapture(str(encoded_path))
+
+    total = 0
+    changed = 0
+    absolute = 0.0
+    squared = 0.0
+    maximum = 0
+    signal_power = 0.0
+    frames = 0
+
+    previews = {}
+
+    try:
+
+        if not original.isOpened() or not encoded.isOpened():
+            raise ValueError('Cannot open the selected videos.')
+
+        while True:
+
+            ok1, frame1 = original.read()
+            ok2, frame2 = encoded.read()
+
+            if ok1 != ok2:
+                raise ValueError(
+                    'The videos have different frame counts.'
+                )
+
+            if not ok1:
+                break
+
+            if frame1.shape != frame2.shape:
+                raise ValueError(
+                    'The video dimensions must match.'
+                )
+
+            # Convert before subtraction to avoid overflow.
+            a = frame1.astype(np.float64)
+            b = frame2.astype(np.float64)
+
+            difference = np.abs(a - b)
+
+            total += difference.size
+            changed += int(np.count_nonzero(difference))
+
+            absolute += float(np.sum(difference))
+            squared += float(np.sum(difference ** 2))
+
+            signal_power += float(np.sum(a ** 2))
+
+            maximum = max(
+                maximum,
+                int(np.max(difference))
+            )
+
+            frames += 1
+
+            # Preview the first frame.
+            if frames == 1:
+
+                # Amplify differences to make them visible.
+                difference_image = np.clip(
+                    difference * 255, 0, 255
+                ).astype(np.uint8)
+
+                previews = {
+                    'original_image': frame_to_base64(frame1),
+                    'encoded_image': frame_to_base64(frame2),
+                    'difference_image': frame_to_base64(
+                        difference_image
+                    ),
+                    'width': frame1.shape[1],
+                    'height': frame1.shape[0]
+                }
+
+        result = calculate_metrics(
+            total,
+            changed,
+            absolute,
+            squared,
+            maximum,
+            255,
+            signal_power
+        )
+
+        result.update(previews)
+        result['frames'] = frames
+        result['unit'] = 'Pixel channel values'
+
+        return result
+
+    finally:
+
+        original.release()
+        encoded.release()
+
+
+def read_pcm_samples(raw):
+
+    with wave.open(io.BytesIO(raw), 'rb') as wf:
+
+        params = wf.getparams()
+        data = wf.readframes(wf.getnframes())
+
+    width = params.sampwidth
+
+    if width == 1:
+
+        samples = (
+            np.frombuffer(data, dtype=np.uint8)
+            .astype(np.int32) - 128
+        )
+
+    elif width == 2:
+
+        samples = np.frombuffer(data, dtype='<i2')
+
+    elif width == 3:
+
+        values = np.frombuffer(
+            data, dtype=np.uint8
+        ).reshape(-1, 3).astype(np.int32)
+
+        samples = (
+            values[:, 0]
+            | (values[:, 1] << 8)
+            | (values[:, 2] << 16)
+        )
+
+        samples = (
+            samples ^ 0x800000
+        ) - 0x800000
+
+    elif width == 4:
+
+        samples = np.frombuffer(data, dtype='<i4')
+
+    else:
+
+        raise ValueError('Unsupported PCM sample width.')
+
+    return params, samples
+
+
+def compare_audio(original_raw, encoded_raw):
+
+    p1, samples1 = read_pcm_samples(original_raw)
+    p2, samples2 = read_pcm_samples(encoded_raw)
+
+    if (
+        p1.nchannels != p2.nchannels
+        or p1.sampwidth != p2.sampwidth
+        or p1.framerate != p2.framerate
+        or samples1.size != samples2.size
+    ):
+
+        raise ValueError(
+            'Audio parameters must match.'
+        )
+
+    if samples1.size == 0:
+        raise ValueError('Audio contains no samples.')
+
+    a = samples1.astype(np.float64)
+    b = samples2.astype(np.float64)
+
+    difference = np.abs(a - b)
+
+    peak = 2 ** (p1.sampwidth * 8 - 1)
+
+    result = calculate_metrics(
+        difference.size,
+        int(np.count_nonzero(difference)),
+        float(np.sum(difference)),
+        float(np.sum(difference ** 2)),
+        int(np.max(difference)),
+        peak,
+        float(np.sum(a ** 2))
+    )
+
+    result['samples'] = int(samples1.size)
+    result['sample_rate'] = p1.framerate
+    result['channels'] = p1.nchannels
+    result['bit_depth'] = p1.sampwidth * 8
+    result['duration'] = round(
+        p1.nframes / p1.framerate, 3
+    )
+
+    result['unit'] = 'Audio samples'
+
+    return result

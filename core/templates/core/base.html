@@ -1,1 +1,147 @@
-{% load static %}<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Stegonography — Audio & Video Steganography</title><link rel="stylesheet" href="{% static 'core/style.css' %}"></head><body>{% if request.path == "/login/" or request.path == "/signup/" %}<main class="auth-screen"><div class="auth-wrap">{% for m in messages %}<div class="notice">{{ m }}</div>{% endfor %}{% block auth_content %}{% endblock %}</div></main>{% else %}<div class="shell"><aside class="sidebar"><a class="brand" href="{% url 'home' %}"><span class="brandmark">◈</span> STEGONO<span>GRAPHY</span></a><div class="navlabel">MENU</div><nav><a href="{% url 'dashboard' %}">▦ &nbsp; Home</a><a href="{% url 'encode' %}">◈ &nbsp; Hide something</a><a href="{% url 'decode' %}">◇ &nbsp; Find a hidden message</a><a href="{% url 'library' %}">▤ &nbsp; My files</a><a href="{% url 'features' %}">✦ &nbsp; Features</a><a href="{% url 'tutorial' %}">◎ &nbsp; How to use it</a></nav><div class="sidebarfoot"><div class="status"><i></i> Your private workspace</div>{% if user.is_authenticated %}<p>Signed in as <strong>{{ user.username }}</strong></p><form action="{% url 'logout' %}" method="post">{% csrf_token %}<button class="linkbutton">Log out ↗</button></form>{% else %}<a href="{% url 'login' %}">Log in →</a>{% endif %}</div></aside><main class="main"><header class="top"><span>HIDE AND OPEN SECRETS</span><span class="topright">◉ &nbsp; AUDIO + VIDEO</span></header><div class="content">{% for m in messages %}<div class="notice {% if m.tags == 'error' %}bad{% endif %}">{{ m }}</div>{% endfor %}{% block content %}{% endblock %}</div><footer>STEGONO<span>GRAPHY</span> &nbsp; / &nbsp; Hide secrets in audio and video <span>AUDIO · VIDEO</span></footer></main></div>{% endif %}<script src="{% static 'core/app.js' %}"></script></body></html>
+{% load static %}
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+
+    <title>Stegonography — Audio & Video Steganography</title>
+
+    <link rel="stylesheet" href="{% static 'core/style.css' %}?v=2">
+</head>
+
+<body>
+
+    {% if request.path == "/login/" or request.path == "/signup/" %}
+
+    <main class="auth-screen">
+        <div class="auth-wrap">
+
+            {% for m in messages %}
+                <div class="notice">{{ m }}</div>
+            {% endfor %}
+
+            {% block auth_content %}
+            {% endblock %}
+
+        </div>
+    </main>
+
+    {% else %}
+
+    <div class="shell">
+
+        <aside class="sidebar">
+
+            <a class="brand" href="{% url 'home' %}">
+                <span class="brandmark">◈</span>
+                STEGONO<span>GRAPHY</span>
+            </a>
+
+            <div class="navlabel">MENU</div>
+
+            <nav>
+                <a href="{% url 'dashboard' %}">
+                    ▦ &nbsp; Home
+                </a>
+
+                <a href="{% url 'encode' %}">
+                    ◈ &nbsp; Hide something
+                </a>
+
+                <a href="{% url 'decode' %}">
+                    ◇ &nbsp; Find a hidden message
+                </a>
+
+                <a href="{% url 'library' %}">
+                    ▤ &nbsp; My files
+                </a>
+
+                <a href="{% url 'features' %}">
+                    ✦ &nbsp; Features
+                </a>
+
+                <a href="{% url 'tutorial' %}">
+                    ◎ &nbsp; How to use it
+                </a>
+                <a href="{% url 'technical' %}">
+                    ▥ &nbsp; Technical Analysis
+                </a>
+            </nav>
+
+            <div class="sidebarfoot">
+
+                <div class="status">
+                    <i></i> Your private workspace
+                </div>
+
+                {% if user.is_authenticated %}
+
+                    <p>
+                        Signed in as
+                        <strong>{{ user.username }}</strong>
+                    </p>
+
+                    <form action="{% url 'logout' %}" method="post">
+                        {% csrf_token %}
+                        <button class="linkbutton">
+                            Log out ↗
+                        </button>
+                    </form>
+
+                {% else %}
+
+                    <a href="{% url 'login' %}">
+                        Log in →
+                    </a>
+
+                {% endif %}
+
+            </div>
+
+        </aside>
+
+        <main class="main">
+
+            <header class="top">
+                <span>HIDE AND OPEN SECRETS</span>
+
+                <span class="topright">
+                    ◉ &nbsp; AUDIO + VIDEO
+                </span>
+            </header>
+
+            <div class="content">
+
+                {% for m in messages %}
+
+                    <div class="notice {% if m.tags == 'error' %}bad{% endif %}">
+                        {{ m }}
+                    </div>
+
+                {% endfor %}
+
+                {% block content %}
+                {% endblock %}
+
+            </div>
+
+            <footer>
+                STEGONO<span>GRAPHY</span>
+                &nbsp; / &nbsp;
+                Hide secrets in audio and video
+                <span>AUDIO · VIDEO</span>
+            </footer>
+
+        </main>
+
+    </div>
+
+    {% endif %}
+
+    <script src="{% static 'core/app.js' %}"></script>
+
+</body>
+
+</html>
