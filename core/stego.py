@@ -24,7 +24,9 @@ import wave
 import subprocess
 import tempfile
 from pathlib import Path
-
+import subprocess
+import tempfile
+from pathlib import Path
 import numpy as np
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -397,7 +399,47 @@ def wav_decode(raw):
     # Recover the hidden payload using LSB extraction.
     return extract(selected)
 
+def preserve_video_audio(source_path, output_path):
+    """Restore the original audio without changing encoded frames."""
 
+    output_path = Path(output_path)
+
+    with tempfile.TemporaryDirectory(
+        dir=output_path.parent
+    ) as directory:
+
+        merged = Path(directory) / 'merged.avi'
+
+        command = [
+            'ffmpeg',
+            '-y',
+            '-i', str(output_path),
+            '-i', str(source_path),
+            '-map', '0:v:0',
+            '-map', '1:a:0?',
+            '-c:v', 'copy',
+            '-c:a', 'pcm_s16le',
+            str(merged)
+        ]
+
+        try:
+            subprocess.run(
+                command,
+                check=True,
+                capture_output=True,
+                timeout=120
+            )
+
+        except FileNotFoundError:
+            raise ValueError('FFmpeg is not installed.')
+
+        except subprocess.TimeoutExpired:
+            raise ValueError('Audio restoration timed out.')
+
+        except subprocess.CalledProcessError:
+            raise ValueError('Cannot restore video audio.')
+
+        merged.replace(output_path)
 
 # 7. VIDEO STEGANOGRAPHY - ENCODING AND DECODING
 
@@ -528,12 +570,20 @@ def video_process(source_path, output_path, payload=None):
             writer.write(frame)
 
         if offset < stream.size:
-            raise ValueError('Video capacity is too small.')
+         raise ValueError('Video capacity is too small.')
 
-        return min(
-            MAX_PAYLOAD,
-            max(0, total // 8 - 4)
-        )
+# Finish writing the encoded video
+        writer.release()
+        writer = None
+
+# Close the original video
+        cap.release()
+
+# Restore the original audio track
+        preserve_video_audio(source_path, output_path)
+
+        return min(MAX_PAYLOAD,max(0, total // 8 - 4)
+)
 
     finally:
         cap.release()
